@@ -634,6 +634,25 @@
         }
 
         document.getElementById('jsonEditor').value = JSON.stringify(particleData, null, 4);
+
+        // คืนค่า Shape / Physics / Spread / Color / Glow / Random Rotation จาก studio meta (ถ้ามี)
+        try {
+            const meta = particleData.__studio_meta;
+            if (meta) {
+                if (meta.shape && document.getElementById(`btn-shape-${meta.shape}`)) setShape(meta.shape);
+                if (meta.physics && document.getElementById(`btn-phys-${meta.physics}`)) setPhysics(meta.physics);
+                if (meta.spread) {
+                    particleSpread = meta.spread;
+                    document.getElementById('uiSpread').value = meta.spread;
+                    document.getElementById('spreadVal').innerText = parseFloat(meta.spread).toFixed(1);
+                    particleGroup.scale.set(particleSpread, particleSpread, particleSpread);
+                }
+                if (meta.color) { applyColor(meta.color); syncMarkersFromColor(meta.color); }
+                if (typeof meta.glow === 'boolean') document.getElementById('chkGlow').checked = meta.glow;
+                if (typeof meta.randomRotation === 'boolean') document.getElementById('chkRandomRotation').checked = meta.randomRotation;
+            }
+        } catch(e) {}
+
         updateJsonFromUI(true); 
         resetParticles();
     }
@@ -1436,6 +1455,20 @@
                 if (ev.id.trim() !== "") particleData.particle_effect.events[ev.id] = eventObj;
             });
         } else { delete particleData.particle_effect.events; }
+
+        // บันทึกสถานะของ Studio (Shape/Physics/Spread/Color ฯลฯ) แนบไปกับ JSON
+        // เพื่อให้ Import/Save Local กลับมาแล้วแสดงผลเหมือนเดิมทุกประการ
+        // (Minecraft จะไม่สนใจ field นี้ ไม่กระทบการใช้งานในเกม)
+        try {
+            particleData.__studio_meta = {
+                shape: currentShapeMode,
+                physics: currentPhysicsMode,
+                spread: particleSpread,
+                color: '#' + globalParticleColor.getHexString(),
+                glow: document.getElementById('chkGlow').checked,
+                randomRotation: document.getElementById('chkRandomRotation').checked
+            };
+        } catch(e) {}
 
         if (!skipEditorSync) jsonEditor.value = JSON.stringify(particleData, null, 4);  
     }  
