@@ -514,20 +514,22 @@
         let identifier = document.getElementById('uiIdentifier').value || 'custom_particle';
         let fileName = identifier.split(':').pop() + ".particle.json"; 
 
-        // วิธีที่ 1: ลองใช้ Web Share API ก่อน (รองรับดีบนมือถือ/Acode - ไม่ทำให้แอปแครช)
-        if (navigator.share || navigator.canShare) {
-            try {
-                const file = new File([jsonText], fileName, { type: "application/json" });
-                if (navigator.canShare && navigator.canShare({ files: [file] })) {
-                    navigator.share({ files: [file], title: fileName })
-                        .then(() => showNotification(`แชร์/บันทึก: ${fileName} สำเร็จ!`))
-                        .catch(() => copyJsonFallback(jsonText, fileName));
-                    return;
-                }
-            } catch (e) { /* ตกไปใช้ fallback ด้านล่าง */ }
-        }
+        // วิธีที่ 1: ดาวน์โหลดผ่าน data-URI (base64) — เข้ากันได้กับ WebView ในแอปอย่าง Acode ดีที่สุด
+        // เพราะไม่ต้องพึ่ง blob: URL ที่บาง WebView จัดการดาวน์โหลดไม่ได้แล้วทำให้แอปแครช
+        try {
+            const base64 = btoa(unescape(encodeURIComponent(jsonText)));
+            const dataUri = "data:application/json;charset=utf-8;base64," + base64;
+            const a = document.createElement('a');  
+            a.href = dataUri;  
+            a.download = fileName;   
+            document.body.appendChild(a);  
+            a.click();  
+            document.body.removeChild(a);  
+            showNotification(`Exported: ${fileName} สำเร็จ!`); 
+            return;
+        } catch (e) { /* ตกไปลองวิธีถัดไป */ }
 
-        // วิธีที่ 2: ลองดาวน์โหลดแบบปกติ (เบราว์เซอร์เดสก์ท็อป/Chrome มือถือ) ด้วย try-catch กันแครช
+        // วิธีที่ 2: ดาวน์โหลดแบบ Blob URL คลาสสิก (เผื่อบางเบราว์เซอร์ไม่รองรับ data-URI ขนาดใหญ่)
         try {
             const blob = new Blob([jsonText], { type: "application/json" });  
             const url = URL.createObjectURL(blob);  
@@ -539,17 +541,31 @@
             document.body.removeChild(a);  
             URL.revokeObjectURL(url); 
             showNotification(`Exported: ${fileName} สำเร็จ!`); 
-        } catch (e) {
-            // วิธีที่ 3: กันเหนียวสุดท้าย - คัดลอกใส่คลิปบอร์ดแทน (ใช้ได้ใน Acode/WebView ทุกกรณี)
-            copyJsonFallback(jsonText, fileName);
+            return;
+        } catch (e) { /* ตกไปลองวิธีถัดไป */ }
+
+        // วิธีที่ 3: Web Share API — ยังได้ไฟล์จริง แค่บันทึกผ่านเมนูแชร์แทน
+        if (navigator.share || navigator.canShare) {
+            try {
+                const file = new File([jsonText], fileName, { type: "application/json" });
+                if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                    navigator.share({ files: [file], title: fileName })
+                        .then(() => showNotification(`แชร์/บันทึก: ${fileName} สำเร็จ!`))
+                        .catch(() => copyJsonFallback(jsonText, fileName));
+                    return;
+                }
+            } catch (e) { /* ตกไปใช้ fallback สุดท้าย */ }
         }
+
+        // วิธีที่ 4: กันเหนียวสุดท้าย - คัดลอกใส่คลิปบอร์ดแทน (ใช้เมื่อดาวน์โหลดไฟล์จริงไม่ได้เลยเท่านั้น)
+        copyJsonFallback(jsonText, fileName);
     }  
 
     function copyJsonFallback(jsonText, fileName) {
         try {
             if (navigator.clipboard && navigator.clipboard.writeText) {
                 navigator.clipboard.writeText(jsonText).then(() => {
-                    showNotification(`คัดลอก JSON แล้ว! สร้างไฟล์ ${fileName} ใน Acode แล้ววาง`);
+                    showNotification(`ดาวน์โหลดไฟล์ไม่ได้ จึงคัดลอก JSON แทน! สร้างไฟล์ ${fileName} แล้ววาง`);
                 });
             } else {
                 const ta = document.createElement('textarea');
@@ -559,7 +575,7 @@
                 ta.focus(); ta.select();
                 document.execCommand('copy');
                 document.body.removeChild(ta);
-                showNotification(`คัดลอก JSON แล้ว! สร้างไฟล์ ${fileName} ใน Acode แล้ววาง`);
+                showNotification(`ดาวน์โหลดไฟล์ไม่ได้ จึงคัดลอก JSON แทน! สร้างไฟล์ ${fileName} แล้ววาง`);
             }
         } catch (e) {
             alert("ไม่สามารถดาวน์โหลด/คัดลอกอัตโนมัติได้ กรุณาเลือกข้อความใน JSON Editor ด้านล่างแล้วคัดลอกด้วยตัวเอง");
